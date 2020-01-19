@@ -1,0 +1,3 @@
+/Users/julianrocha/code/sheesh-shell-csc360/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/Users/julianrocha/code/sheesh-shell-csc360/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/julianrocha/code/sheesh-shell-csc360/cmake-build-debug/CMakeFiles/sheesh.dir
