@@ -3,4 +3,5 @@ CC = gcc
 CFLAGS=-Wall -Werror -std=c11 -pedantic-errors
 
 SEEsh: SEEsh.c
-	${CC} ${CFLAGS} -o SEEsh SEEsh.c
+	${CC} ${CFLAGS} -o SEEsh.o SEEsh.c
+	

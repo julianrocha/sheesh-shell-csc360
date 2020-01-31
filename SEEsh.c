@@ -1,8 +1,12 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include <stdlib.h> // exit, etc...
 #include <stdio.h> // printing, file opening, etc...
 #include <string.h> // string tokenizing/comparisons, etc...
 #include <unistd.h> // fork(), getcwd(), etc...
 #include <signal.h> // signal handler
+#include <sys/types.h> // wait
+#include <sys/wait.h> // wait
 
 #define MAX_INPUT_LENGTH 514 // as defined in assingment description. 512 characters + '\n' + '\0'
 #define WHITE_SPACE_DELIM " \t\r\n\a" // each char considered a delimiter for commands in user input
@@ -264,7 +268,6 @@ void signal_interrupt_handler(int sig){
 
 // TODO:
 // need to make a SEEshrc
-// need to make a makefile
 // need to test with valgrind for memory leaks
 // need to test for errors which crash seesh
 // need to add some testing for swap in doubly linked list
@@ -287,6 +290,3 @@ int main(int argc, char *argv[]) {
 
     return EXIT_SUCCESS;
 }
-
-// gcc -std=c11 -pedantic-errors -Wall -Werror SEEsh.c -o SEEsh
-
