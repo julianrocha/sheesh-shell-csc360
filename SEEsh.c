@@ -60,16 +60,70 @@ char *seesh_built_in_descriptions[] = {
   	" : print a list of all previously issued commands. re-execute a previously issued command by typing a prefix of that command preceded by an exclamation point (!commandprefix)."
 };
 
+// START OF LOGIC FOR HISTORY COMMAND
+struct command_node {
+	int index;
+	char* command_string;
+	struct command_node* next;	
+};
+
+int command_index = 0;
+struct command_node* head;
+struct command_node* tail;
+
+struct command_node* create(char* command_string) {
+	int len = strlen(command_string);
+	char* command_string_cpy = (char*)malloc(sizeof(char) * (len + 1));
+	strcpy(command_string_cpy, command_string);
+
+    struct command_node* newNode
+        = (struct command_node*)malloc(sizeof(struct command_node));
+    newNode->index = ++command_index;
+	newNode->command_string = command_string_cpy;
+    newNode->next = NULL;
+    return newNode;
+}
+
+void print(struct command_node* ref) {
+	if(ref == NULL){
+		return;
+	}
+    struct command_node* n = ref;
+    do {
+        printf("%d\t%s\n",n->index, n->command_string);
+    } while((n = n->next) != NULL);
+}
+
+void add_command(char* command_string){
+	if(head == NULL){ // first command
+		head = create(command_string);
+		tail = head;
+	} else {
+		tail->next = create(command_string);
+		tail = tail->next;
+	}
+}
+
+struct command_node* erase(struct command_node* ref){
+	struct command_node* next = ref->next;
+	free(ref->command_string);
+	free(ref);
+	return next;
+}
+
+void clear(struct command_node* ref) {
+	while(ref != NULL){
+		ref = erase(ref);
+	}
+}
+// END OF LOGIC FOR HISTORY COMMAND
+
 // Change working direcotry to the passed absolute OR relative path
 // If no path is passed, change to the directory specified in the HOME env var
 int cd(char **command_and_arguments){// need to make a SEEshrc
-// need to add some testing for swap in doubly linked list
 	char* dir = command_and_arguments[1];// need to make a SEEshrc
-// need to add some testing for swap in doubly linked list
 	if(dir == NULL){// need to make a SEEshrc
-// need to add some testing for swap in doubly linked list
 		dir = getenv("HOME");// need to make a SEEshrc
-// need to add some testing for swap in doubly linked list
 	}
 	if(chdir(dir) != 0){
 		perror("Problem changing working directory");
@@ -107,6 +161,7 @@ int help(char **command_and_arguments){
 // Terminate the seesh shell and return to parent process (likely the linux shell)
 int seesh_exit(char **command_and_arguments){
 	free(command_and_arguments); // free memeory before exiting
+	clear(head);
 	exit(EXIT_SUCCESS);
 	return 0;
 }
@@ -140,8 +195,7 @@ int unset(char **command_and_arguments){
 	char *var = command_and_arguments[1];
 	if(var != NULL){
 		if(unsetenv(var) != 0){
-			perror("Problem unsetting env variable");// need to make a SEEshrc
-// need to add some testing for swap in doubly linked list
+			perror("Problem unsetting env variable");
 		}
 	}
 	return 1;
@@ -150,6 +204,7 @@ int unset(char **command_and_arguments){
 // use a singly linked list with head and tail pointers
 // only add commands when they were successful
 int history(char **command_and_arguments){
+	print(head);
 	return 1;
 }
 
@@ -158,6 +213,7 @@ void get_user_input(char line[]) {
     if(fgets(line, MAX_INPUT_LENGTH, stdin) == NULL){
     	if(feof(stdin)){
     		printf("\n");
+			clear(head);
     		exit(EXIT_SUCCESS); // terminate shell when EOF (^D) is entered
     	}
         // else there was an unknown issue reading input
@@ -209,6 +265,7 @@ int run_executable(char **command_and_arguments) {
 		child_pid = pid;
 		// wait in parent process until child process has completed
 		waitpid(pid, &status, WUNTRACED); // https://linux.die.net/man/2/wait
+		return 1;
 	} else {
 		// still in parent but could not create child
 		perror("Problem forking child process"); // https://www.tutorialspoint.com/c_standard_library/c_function_perror.htm
@@ -219,7 +276,7 @@ int run_executable(char **command_and_arguments) {
 int execute(char **command_and_arguments) {
 	// empty user_input
 	if(command_and_arguments[0] == NULL) {
-		return 1;
+		return 0; // don't save empty lines to history
 	}
 	// if builtin command, execute in this process and return
 	// loop over built-in commands, compare with first arg, call func if matching
@@ -235,14 +292,17 @@ int execute(char **command_and_arguments) {
 void seesh_loop() {
     char user_input[MAX_INPUT_LENGTH];
     char ** command_and_arguments;
-    int alive = 1;
-    while(alive){
+    int save_command = 1;
+    while(1){
         printf("? ");   										// command prompt
         get_user_input(user_input);  							// grab user_input
         command_and_arguments = parse_user_input(user_input); 	// parse_user_input
-        alive = execute(command_and_arguments);   				// execute_user_input
+        save_command = execute(command_and_arguments);   		// execute_user_input
         child_pid = seesh_pid;									// reset pids for sig interrupt handling
         free(command_and_arguments);							// clean slate for next command
+		if(save_command){
+			add_command(user_input);							// for history
+		}
     }
 }
 
@@ -277,7 +337,10 @@ void seesh_config(){
 }
 
 void signal_interrupt_handler(int sig){
-	if(child_pid == seesh_pid) exit(EXIT_SUCCESS); // if invoked from parent, exit
+	if(child_pid == seesh_pid){
+		clear(head);
+		exit(EXIT_SUCCESS); // if invoked from parent, exit
+	}
 	kill(child_pid, SIGTERM); // if invoked while child is running, kill child
 	child_pid = getpid(); // 
 }
@@ -295,6 +358,9 @@ int main(int argc, char *argv[]) {
 
     // loop for shell
     seesh_loop();
+
+	// free up memory before quiting
+	clear(head);
 
     return EXIT_SUCCESS;
 }
