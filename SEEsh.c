@@ -89,6 +89,7 @@ int help(char **command_and_arguments){
 
 // Terminate the seesh shell and return to parent process (likely the linux shell)
 int seesh_exit(char **command_and_arguments){
+	exit(EXIT_SUCCESS);
 	return 0;
 }
 
@@ -116,6 +117,7 @@ int set(char **command_and_arguments){
 
 // Note, there is an assumption that var cannot contain '='
 // Including '=' will result in unsuccesful unset
+// If var does not exist, then unset will succeed and env will remain unchanged
 int unset(char **command_and_arguments){
 	char *var = command_and_arguments[1];
 	if(var != NULL){
@@ -180,7 +182,8 @@ int run_executable(char **command_and_arguments) {
 	if(pid == 0) {
 		// child process
 		if(execvp(command_and_arguments[0], command_and_arguments) == -1){ // https://www.geeksforgeeks.org/exec-family-of-functions-in-c/
-			perror("Problem starting child process");
+			perror("Problem executing program in child process");
+			exit(EXIT_FAILURE); // terminate child process
 		}
 	} else if (pid > 0) {
 		// parent process
@@ -189,8 +192,7 @@ int run_executable(char **command_and_arguments) {
 		waitpid(pid, &status, WUNTRACED); // https://linux.die.net/man/2/wait
 	} else {
 		// still in parent but could not create child
-		perror("Error: Problem starting child process! Terminating..."); // https://www.tutorialspoint.com/c_standard_library/c_function_perror.htm
-        exit(EXIT_FAILURE);
+		perror("Problem starting child process"); // https://www.tutorialspoint.com/c_standard_library/c_function_perror.htm
 	}
 	return 1;
 }
@@ -226,46 +228,60 @@ void seesh_loop() {
 }
 
 // as specified in assignment, .SEEshrc is expected to be located in HOME dir of the user who started seesh
+// as specified in assignment, it is assumed that no line of .SEEshrc will be longer than MAX_INPUT_LENGTH
 void seesh_config(){
 	char *home = getenv("HOME");
+	char *home_copy = malloc((strlen(home) + 1) * sizeof(char));
+	strcpy(home_copy, home);
 	char *file_name = "/.SEEshrc";
-	FILE *file_pointer = fopen(strcat(home, file_name), "r");
+	FILE *file_pointer = fopen(strcat(home_copy, file_name), "r");
+	free(home_copy);
 	if(file_pointer == NULL) {
 		perror("Problem finding/opening .SEEshrc!");
         return;
 	}
 
 	char file_line[MAX_INPUT_LENGTH];
-	while(fgets(file_line, MAX_INPUT_LENGTH, file_pointer) != NULL) {
-		// print and execute each line of file
+	char ** command_and_arguments;
+	int alive = 1;
+	while(fgets(file_line, MAX_INPUT_LENGTH, file_pointer) != NULL && alive) {
+		int end_of_line = strlen(file_line) - 1;
+		if(file_line[end_of_line] == '\n'){
+			file_line[end_of_line] = '\0';
+		}
+		printf("$ %s\n", file_line);
+		command_and_arguments = parse_user_input(file_line);
+		alive = execute(command_and_arguments);
+		free(command_and_arguments);
 	}
 }
 
 void signal_interrupt_handler(int sig){
-	if(child_pid == seesh_pid) exit(EXIT_SUCCESS);
-	kill(child_pid, SIGTERM);
-	child_pid = getpid();
+	if(child_pid == seesh_pid) exit(EXIT_SUCCESS); // if invoked from parent, exit
+	kill(child_pid, SIGTERM); // if invoked while child is running, kill child
+	child_pid = getpid(); // 
 }
 
 // TODO:
-// need to read in config from SEEshrc
-// need to make a readme
 // need to make a SEEshrc
 // need to make a makefile
 // need to test with valgrind for memory leaks
 // need to test for errors which crash seesh
 // need to add some testing for swap in doubly linked list
+// need to see why PWD env var isn't changing
 // need to test on linux servers
 
 // need to implement history
 int main(int argc, char *argv[]) {
-	seesh_pid = getpid();
-	child_pid = getpid();
-	signal(SIGINT, signal_interrupt_handler); // handle ^C entered by user
 
-	puts("Welcome to SEEsh!");
     // load config
-    // seesh_config();
+    seesh_config();
+
+    // initialize signal handler for ^C entered by user
+    seesh_pid = getpid();
+	child_pid = getpid();
+	signal(SIGINT, signal_interrupt_handler);
+
     // loop for shell
     seesh_loop();
 
