@@ -1,1 +1,21 @@
 pwd
+cd ..
+pwd
+cd
+pwd
+cd /home/julianrocha/Desktop/CSC360/sheesh-shell-csc360
+pwd
+help
+set
+set NEWVAR funvalue
+set EMPTYSTRING
+set HOME badhome
+set bad=var=name randomvalue
+set
+unset EMPTYSTRING
+unset nonexistantvar
+unset bad=var=name
+set HOME /home/julianrocha
+set
+ls
+./hello_world.o

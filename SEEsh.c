@@ -7,6 +7,7 @@
 #include <signal.h> // signal handler
 #include <sys/types.h> // wait
 #include <sys/wait.h> // wait
+#include <errno.h> // errno global var
 
 #define MAX_INPUT_LENGTH 514 // as defined in assingment description. 512 characters + '\n' + '\0'
 #define WHITE_SPACE_DELIM " \t\r\n\a" // each char considered a delimiter for commands in user input
@@ -61,14 +62,26 @@ char *seesh_built_in_descriptions[] = {
 
 // Change working direcotry to the passed absolute OR relative path
 // If no path is passed, change to the directory specified in the HOME env var
-int cd(char **command_and_arguments){
-	char* dir = command_and_arguments[1];
-	if(dir == NULL){
-		dir = getenv("HOME");
+int cd(char **command_and_arguments){// need to make a SEEshrc
+// need to add some testing for swap in doubly linked list
+	char* dir = command_and_arguments[1];// need to make a SEEshrc
+// need to add some testing for swap in doubly linked list
+	if(dir == NULL){// need to make a SEEshrc
+// need to add some testing for swap in doubly linked list
+		dir = getenv("HOME");// need to make a SEEshrc
+// need to add some testing for swap in doubly linked list
 	}
 	if(chdir(dir) != 0){
 		perror("Problem changing working directory");
     }
+	// Update PWD env var
+	char pwd[MAX_INPUT_LENGTH];
+	if(getcwd(pwd, sizeof(pwd)) == NULL){
+		perror("Problem getting current working directory");
+	}
+	if(setenv("PWD", pwd, 1) != 0){
+		perror("Problem setting PWD env variable");
+	}
 	return 1;
 }
 
@@ -93,6 +106,7 @@ int help(char **command_and_arguments){
 
 // Terminate the seesh shell and return to parent process (likely the linux shell)
 int seesh_exit(char **command_and_arguments){
+	free(command_and_arguments); // free memeory before exiting
 	exit(EXIT_SUCCESS);
 	return 0;
 }
@@ -126,7 +140,8 @@ int unset(char **command_and_arguments){
 	char *var = command_and_arguments[1];
 	if(var != NULL){
 		if(unsetenv(var) != 0){
-			perror("Problem unsetting env variable");
+			perror("Problem unsetting env variable");// need to make a SEEshrc
+// need to add some testing for swap in doubly linked list
 		}
 	}
 	return 1;
@@ -178,7 +193,7 @@ char **parse_user_input(char input[]) {
     return tokens;
 }
 
-// TODO, if divide_by_zero fails, need to display this failure to user
+// Assuming explicit error messaging is only necessary when fork fails or when execcvp fails
 int run_executable(char **command_and_arguments) {
 	int pid;
 	int status;
@@ -187,7 +202,7 @@ int run_executable(char **command_and_arguments) {
 		// child process
 		if(execvp(command_and_arguments[0], command_and_arguments) == -1){ // https://www.geeksforgeeks.org/exec-family-of-functions-in-c/
 			perror("Problem executing program in child process");
-			exit(EXIT_FAILURE); // terminate child process
+			exit(errno); // terminate child process
 		}
 	} else if (pid > 0) {
 		// parent process
@@ -196,7 +211,7 @@ int run_executable(char **command_and_arguments) {
 		waitpid(pid, &status, WUNTRACED); // https://linux.die.net/man/2/wait
 	} else {
 		// still in parent but could not create child
-		perror("Problem starting child process"); // https://www.tutorialspoint.com/c_standard_library/c_function_perror.htm
+		perror("Problem forking child process"); // https://www.tutorialspoint.com/c_standard_library/c_function_perror.htm
 	}
 	return 1;
 }
@@ -234,30 +249,31 @@ void seesh_loop() {
 // as specified in assignment, .SEEshrc is expected to be located in HOME dir of the user who started seesh
 // as specified in assignment, it is assumed that no line of .SEEshrc will be longer than MAX_INPUT_LENGTH
 void seesh_config(){
-	char *home = getenv("HOME");
-	char *home_copy = malloc((strlen(home) + 1) * sizeof(char));
-	strcpy(home_copy, home);
-	char *file_name = "/.SEEshrc";
-	FILE *file_pointer = fopen(strcat(home_copy, file_name), "r");
-	free(home_copy);
-	if(file_pointer == NULL) {
-		perror("Problem finding/opening .SEEshrc!");
-        return;
+	const char *home = getenv("HOME");
+	char* config_file = "/.SEEshrc";
+	char *config_path = malloc((strlen(home) + strlen(config_file) + 1) * sizeof(char*));
+	strcpy(config_path, home);
+	strcat(config_path, config_file);
+	FILE *file_pointer  = fopen(config_path, "r"); // read only
+	free(config_path);	// config_path was only needed to open .SEEshrc, can now be discarded
+	if(file_pointer == NULL){
+		perror("Probelm finding/opening .SEEshrc");
 	}
-
-	char file_line[MAX_INPUT_LENGTH];
+	char line[MAX_INPUT_LENGTH];
 	char ** command_and_arguments;
-	int alive = 1;
-	while(fgets(file_line, MAX_INPUT_LENGTH, file_pointer) != NULL && alive) {
-		int end_of_line = strlen(file_line) - 1;
-		if(file_line[end_of_line] == '\n'){
-			file_line[end_of_line] = '\0';
+    int alive = 1;
+	while (fgets(line, MAX_INPUT_LENGTH, file_pointer) != NULL && alive){
+		 // remove '\n' from end of line by shifting '\0' left
+		int end_of_line = strlen(line) - 1;
+		if(*line && line[end_of_line] == '\n'){
+			line[end_of_line] = '\0';
 		}
-		printf("$ %s\n", file_line);
-		command_and_arguments = parse_user_input(file_line);
-		alive = execute(command_and_arguments);
-		free(command_and_arguments);
+		printf("$ %s\n", line);
+		command_and_arguments = parse_user_input(line); 		// parse file line
+        alive = execute(command_and_arguments);   				// execute line
+        free(command_and_arguments);							// clean slate for next command
 	}
+	fclose(file_pointer);	// finished reading ./SEEshrc
 }
 
 void signal_interrupt_handler(int sig){
@@ -266,15 +282,7 @@ void signal_interrupt_handler(int sig){
 	child_pid = getpid(); // 
 }
 
-// TODO:
-// need to make a SEEshrc
-// need to test with valgrind for memory leaks
-// need to test for errors which crash seesh
-// need to add some testing for swap in doubly linked list
-// need to see why PWD env var isn't changing
-// need to test on linux servers
-
-// need to implement history
+// TODO: need to implement history
 int main(int argc, char *argv[]) {
 
     // load config

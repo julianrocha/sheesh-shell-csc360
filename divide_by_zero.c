@@ -10,4 +10,4 @@ int main(int argc, char *argv[]) {
 	printf("%d\n", z);
 }
 
-// gcc -std=c11 -pedantic-errors -Wall -Werror divide_by_zero.c -o divide_by_zero
+// gcc -std=c11 -pedantic-errors -Wall -Werror divide_by_zero.c -o divide_by_zero.o

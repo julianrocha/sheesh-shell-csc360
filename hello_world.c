@@ -9,4 +9,4 @@ int main(int argc, char *argv[]) {
 	puts("Hello World again! Program is now finished.");
 }
 
-// gcc -std=c11 -pedantic-errors -Wall -Werror hello_world.c -o hello_world
+// gcc -std=c11 -pedantic-errors -Wall -Werror hello_world.c -o hello_world.o
