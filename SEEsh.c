@@ -8,6 +8,7 @@
 #include <sys/types.h> // wait
 #include <sys/wait.h> // wait
 #include <errno.h> // errno global var
+#include <ctype.h> // isdigit()
 
 #define MAX_INPUT_LENGTH 514 // as defined in assingment description. 512 characters + '\n' + '\0'
 #define WHITE_SPACE_DELIM " \t\r\n\a" // each char considered a delimiter for commands in user input
@@ -20,6 +21,11 @@ int seesh_exit(char **command_and_arguments);
 int set(char **command_and_arguments);
 int unset(char **command_and_arguments);
 int history(char **command_and_arguments);
+
+// more function declarations for the history command
+int execute(char **command_and_arguments);
+int run_executable(char **command_and_arguments);
+char **parse_user_input(char input[]);
 
 extern char **environ; // POSIX standard for accessing the environement variables passed from parent
 // https://stackoverflow.com/questions/4291080/print-the-environment-variables-using-environ
@@ -115,6 +121,30 @@ void clear(struct command_node* ref) {
 	while(ref != NULL){
 		ref = erase(ref);
 	}
+}
+
+int execute_prefixed_command(char* command_number){
+	int index = atoi(command_number);
+	int i = 1;
+	struct command_node* ref = head;
+	while(i < index && ref != NULL){
+		ref = ref->next;
+		i++;
+	}
+	if(ref == NULL){
+		puts("This prefixed command does not exist");
+		return 0;
+	}
+	printf("$ %s\n", ref->command_string);
+	char **command_and_arguments;
+	command_and_arguments = parse_user_input(ref->command_string); 	// parse_user_input
+    int save_command = execute(command_and_arguments);   			// execute_user_input
+    child_pid = seesh_pid;											// reset pids for sig interrupt handling
+    free(command_and_arguments);									// clean slate for next command
+	if(save_command){
+		add_command(ref->command_string);							// for history
+	}
+	return 0;
 }
 // END OF LOGIC FOR HISTORY COMMAND
 
@@ -258,6 +288,8 @@ int run_executable(char **command_and_arguments) {
 		// child process
 		if(execvp(command_and_arguments[0], command_and_arguments) == -1){ // https://www.geeksforgeeks.org/exec-family-of-functions-in-c/
 			perror("Problem executing program in child process");
+			free(command_and_arguments);
+			clear(head);
 			exit(errno); // terminate child process
 		}
 	} else if (pid > 0) {
@@ -283,6 +315,20 @@ int execute(char **command_and_arguments) {
 	for(int i = 0; i < sizeof(seesh_built_in_str_commands) / sizeof(char *); i++){
 		if(strcmp(command_and_arguments[0], seesh_built_in_str_commands[i]) == 0){
 			return (*seesh_built_in_func_pointers[i])(command_and_arguments);
+		}
+	}
+	// check if this is a prefixed command
+	if(command_and_arguments[0][0] == '!' && command_and_arguments[1] == NULL){
+		int len = strlen(command_and_arguments[0]);
+		int i;
+		for(i = 1; i < len; i++){
+			if(!isdigit(command_and_arguments[0][i])){
+				break;
+			}
+		}
+		if(i == len && len > 1){
+			command_and_arguments[0]++; // remove '!'
+			return execute_prefixed_command(command_and_arguments[0]);
 		}
 	}
 	// else, fork a child process and return when child finishes
@@ -345,7 +391,6 @@ void signal_interrupt_handler(int sig){
 	child_pid = getpid(); // 
 }
 
-// TODO: need to implement history
 int main(int argc, char *argv[]) {
 
     // load config
